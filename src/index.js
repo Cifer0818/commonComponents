@@ -1,3 +1,5 @@
+console.log('[portal-runtime] commonComponents loaded')
+
 export const TOKEN_TTL_SECONDS = 2 * 60 * 60
 export const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60
 
