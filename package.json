@@ -1,0 +1,25 @@
+{
+  "name": "@local/portal-runtime",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Shared portal runtime helpers for the main portal and child systems.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Cifer0818/commonComponents.git"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "exports": {
+    ".": "./src/index.js",
+    "./auth": "./src/auth.js",
+    "./entry-url": "./src/entry-url.js",
+    "./request": "./src/request.js",
+    "./styles": "./src/styles/index.css",
+    "./styles.css": "./src/styles/index.css"
+  },
+  "scripts": {
+    "verify": "node scripts/verify-runtime.mjs"
+  }
+}
