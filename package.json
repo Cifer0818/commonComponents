@@ -1,7 +1,7 @@
 {
   "name": "@local/portal-runtime",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.2",
   "description": "Shared portal runtime helpers for the main portal and child systems.",
   "type": "module",
   "repository": {
@@ -11,6 +11,9 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "dependencies": {
+    "axios": "^1.18.1"
+  },
   "exports": {
     ".": "./src/index.js",
     "./auth": "./src/auth.js",

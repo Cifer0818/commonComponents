@@ -1,9 +1,12 @@
 console.log('[portal-runtime] commonComponents loaded')
 
+import axios from 'axios'
+
 export const TOKEN_TTL_SECONDS = 2 * 60 * 60
 export const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60
 
 const DEFAULT_CONTENT_TYPE = 'application/json; charset=utf-8'
+const DEFAULT_AXIOS_TIMEOUT = 15000
 
 const currentUnixSeconds = () => Math.floor(Date.now() / 1000)
 
@@ -76,6 +79,42 @@ const joinUrl = (baseUrl = '', path = '') => {
 
   return `${normalizedBase}/${normalizedPath}`
 }
+
+export const createAxiosService = ({
+  baseURL = '',
+  timeout = DEFAULT_AXIOS_TIMEOUT,
+  headers,
+  onResponse,
+  onResponseError,
+  ...axiosConfig
+} = {}) => {
+  const service = axios.create({
+    baseURL,
+    timeout,
+    headers,
+    ...axiosConfig,
+  })
+
+  service.interceptors.response.use(
+    typeof onResponse === 'function' ? onResponse : (response) => response,
+    typeof onResponseError === 'function' ? onResponseError : (error) => Promise.reject(error),
+  )
+
+  return service
+}
+
+export const createAxiosTransport =
+  (service) =>
+  (requestConfig) => {
+    if (typeof service !== 'function') {
+      return Promise.reject(new TypeError('createAxiosTransport requires an axios service'))
+    }
+
+    return service({
+      ...requestConfig,
+      transformRequest: [(value) => value],
+    })
+  }
 
 export const createMockToken = (user = {}, nowSeconds = currentUnixSeconds()) => {
   const normalizedUser = normalizeUser(user)

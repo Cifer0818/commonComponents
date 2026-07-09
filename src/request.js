@@ -1,1 +1,1 @@
-export { createRequestClient } from './index.js'
+export { createAxiosService, createAxiosTransport, createRequestClient } from './index.js'

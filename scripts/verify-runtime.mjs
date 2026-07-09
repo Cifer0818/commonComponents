@@ -7,6 +7,8 @@ import {
   TOKEN_TTL_SECONDS,
   appendTokenToUrl,
   consumeTokenFromUrl,
+  createAxiosService,
+  createAxiosTransport,
   createMockToken,
   createRequestClient,
   isTokenExpired,
@@ -35,6 +37,8 @@ const parsed = parseToken(token)
 assert.equal(typeof createMockTokenFromAuth, 'function')
 assert.equal(typeof consumeTokenFromEntryUrl, 'function')
 assert.equal(typeof createRequestClientFromRequest, 'function')
+assert.equal(typeof createAxiosService, 'function')
+assert.equal(typeof createAxiosTransport, 'function')
 assert.equal(existsSync(stylesPath), true)
 assert.equal(TOKEN_TTL_SECONDS, 7200)
 assert.equal(TOKEN_REFRESH_WINDOW_SECONDS, 300)
@@ -117,5 +121,26 @@ const apiProxyClient = createRequestClient({
 const apiProxyRequest = await apiProxyClient.http.post('api/up/ProductDataSource/GetAllDataSourceList')
 
 assert.equal(apiProxyRequest.url, '/api/up/ProductDataSource/GetAllDataSourceList')
+
+const axiosService = createAxiosService({
+  adapter: async (config) => ({
+    data: { ok: true },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config,
+  }),
+})
+const axiosTransport = createAxiosTransport(axiosService)
+const axiosResponse = await axiosTransport({
+  url: '/health',
+  method: 'get',
+  headers: {
+    Authorization: token,
+  },
+})
+
+assert.equal(axiosResponse.status, 200)
+assert.deepEqual(axiosResponse.data, { ok: true })
 
 console.log('portal-runtime verification passed')
