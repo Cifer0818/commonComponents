@@ -7,6 +7,11 @@ export const TOKEN_REFRESH_WINDOW_SECONDS = 5 * 60
 
 const DEFAULT_CONTENT_TYPE = 'application/json; charset=utf-8'
 const DEFAULT_AXIOS_TIMEOUT = 15000
+const DEFAULT_CHILD_AUTH_STORAGE_KEY = 'medication_child_auth'
+
+const portalRuntimeConfig = {
+  childRequest: {},
+}
 
 const currentUnixSeconds = () => Math.floor(Date.now() / 1000)
 
@@ -55,6 +60,18 @@ const parseJson = (value, fallback = null) => {
   } catch {
     return fallback
   }
+}
+
+const getBrowserSessionStorage = () => {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  return window.sessionStorage
+}
+
+const writeJson = (storage, key, value) => {
+  storage?.setItem(key, JSON.stringify(value))
 }
 
 const joinUrl = (baseUrl = '', path = '') => {
@@ -115,6 +132,146 @@ export const createAxiosTransport =
       transformRequest: [(value) => value],
     })
   }
+
+export const configurePortalRuntime = (config = {}) => {
+  portalRuntimeConfig.childRequest = {
+    ...portalRuntimeConfig.childRequest,
+    ...(config.childRequest || {}),
+  }
+
+  return {
+    ...portalRuntimeConfig,
+  }
+}
+
+const normalizeChildSessionFromToken = (token) => {
+  const parsedToken = parseToken(token)
+
+  if (!parsedToken) {
+    return null
+  }
+
+  return {
+    token,
+    user: {
+      ...parsedToken.user,
+      id: parsedToken.user.userId,
+      userName: parsedToken.user.userName || parsedToken.user.name,
+      org_id: parsedToken.user.orgId,
+      org_name: parsedToken.user.orgName,
+      dept_id: parsedToken.user.deptId,
+      dept_name: parsedToken.user.deptName,
+    },
+    issuedAt: parsedToken.issuedAt,
+    expiresAt: parsedToken.expiresAt,
+    expiresIn: parsedToken.expiresIn,
+  }
+}
+
+const clearChildSession = ({ storage, authStorageKey }) => {
+  storage?.removeItem(authStorageKey)
+}
+
+const redirectChildUnauthorized = ({ storage, authStorageKey, unauthorizedPath }) => {
+  clearChildSession({ storage, authStorageKey })
+
+  if (typeof window !== 'undefined' && unauthorizedPath) {
+    window.location.replace(unauthorizedPath)
+  }
+}
+
+const resolveChildRequestOptions = (options = {}) => ({
+  ...portalRuntimeConfig.childRequest,
+  ...options,
+  authStorageKey:
+    options.authStorageKey ||
+    portalRuntimeConfig.childRequest.authStorageKey ||
+    DEFAULT_CHILD_AUTH_STORAGE_KEY,
+  storage:
+    options.storage || portalRuntimeConfig.childRequest.storage || getBrowserSessionStorage(),
+  unauthorizedPath:
+    options.unauthorizedPath ||
+    portalRuntimeConfig.childRequest.unauthorizedPath ||
+    '/unauthorized',
+})
+
+const ensureChildRequestSession = (options = {}, nowSeconds = currentUnixSeconds()) => {
+  const resolvedOptions = resolveChildRequestOptions(options)
+  const { storage, authStorageKey } = resolvedOptions
+  const session = parseJson(storage?.getItem(authStorageKey))
+
+  if (!session?.token) {
+    redirectChildUnauthorized(resolvedOptions)
+    return null
+  }
+
+  if (!shouldRefreshToken(session.token, nowSeconds)) {
+    return session
+  }
+
+  const refreshedSession = normalizeChildSessionFromToken(refreshMockToken(session.token, nowSeconds))
+
+  if (!refreshedSession) {
+    redirectChildUnauthorized(resolvedOptions)
+    return null
+  }
+
+  writeJson(storage, authStorageKey, refreshedSession)
+  return refreshedSession
+}
+
+export const createChildRequestClient = (options = {}) => {
+  const service = createAxiosService({
+    timeout: options.timeout ?? DEFAULT_AXIOS_TIMEOUT,
+    adapter: options.adapter,
+    onResponse: options.onResponse || ((response) => response.data),
+    onResponseError:
+      options.onResponseError ||
+      ((error) => {
+        if (error.response?.status === 401) {
+          redirectChildUnauthorized(resolveChildRequestOptions(options))
+          return Promise.reject(new Error('登录状态已失效'))
+        }
+
+        return Promise.reject(error)
+      }),
+  })
+
+  return createRequestClient({
+    getToken: () => ensureChildRequestSession(options)?.token || '',
+    getRuntimeConfig: () => {
+      const resolvedOptions = resolveChildRequestOptions(options)
+
+      return {
+        baseUrl: resolvedOptions.baseUrl || resolvedOptions.baseURL || '',
+        appid: resolvedOptions.appid || 'medication-quality-control',
+        deviceid: resolvedOptions.deviceid || 'browser',
+      }
+    },
+    getEncryptionFlags: () => ({
+      inParamEn: '0',
+      outParamEn: '0',
+    }),
+    transport: createAxiosTransport(service),
+  })
+}
+
+let defaultChildRequestClient = null
+
+export const getChildRequestClient = () => {
+  if (!defaultChildRequestClient) {
+    defaultChildRequestClient = createChildRequestClient()
+  }
+
+  return defaultChildRequestClient
+}
+
+export const childRequest = (...args) => getChildRequestClient().request(...args)
+
+export const childHttp = {
+  get: (...args) => getChildRequestClient().http.get(...args),
+  post: (...args) => getChildRequestClient().http.post(...args),
+}
 
 export const createMockToken = (user = {}, nowSeconds = currentUnixSeconds()) => {
   const normalizedUser = normalizeUser(user)

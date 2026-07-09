@@ -1,7 +1,7 @@
 {
   "name": "@local/portal-runtime",
   "private": true,
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Shared portal runtime helpers for the main portal and child systems.",
   "type": "module",
   "repository": {

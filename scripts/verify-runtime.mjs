@@ -7,8 +7,10 @@ import {
   TOKEN_TTL_SECONDS,
   appendTokenToUrl,
   consumeTokenFromUrl,
+  configurePortalRuntime,
   createAxiosService,
   createAxiosTransport,
+  createChildRequestClient,
   createMockToken,
   createRequestClient,
   isTokenExpired,
@@ -37,8 +39,10 @@ const parsed = parseToken(token)
 assert.equal(typeof createMockTokenFromAuth, 'function')
 assert.equal(typeof consumeTokenFromEntryUrl, 'function')
 assert.equal(typeof createRequestClientFromRequest, 'function')
+assert.equal(typeof configurePortalRuntime, 'function')
 assert.equal(typeof createAxiosService, 'function')
 assert.equal(typeof createAxiosTransport, 'function')
+assert.equal(typeof createChildRequestClient, 'function')
 assert.equal(existsSync(stylesPath), true)
 assert.equal(TOKEN_TTL_SECONDS, 7200)
 assert.equal(TOKEN_REFRESH_WINDOW_SECONDS, 300)
@@ -142,5 +146,51 @@ const axiosResponse = await axiosTransport({
 
 assert.equal(axiosResponse.status, 200)
 assert.deepEqual(axiosResponse.data, { ok: true })
+
+const storageData = new Map()
+const memoryStorage = {
+  getItem: (key) => storageData.get(key) || null,
+  setItem: (key, value) => storageData.set(key, value),
+  removeItem: (key) => storageData.delete(key),
+}
+
+const childToken = createMockToken(user)
+const childParsed = parseToken(childToken)
+
+memoryStorage.setItem(
+  'medication_child_auth',
+  JSON.stringify({
+    token: childToken,
+    user,
+    issuedAt: childParsed.issuedAt,
+    expiresAt: childParsed.expiresAt,
+    expiresIn: childParsed.expiresIn,
+  }),
+)
+
+const childClient = createChildRequestClient({
+  storage: memoryStorage,
+  baseUrl: 'http://child-api.local',
+  appid: 'child-app',
+  deviceid: 'child-device',
+  adapter: async (config) => ({
+    data: {
+      url: config.url,
+      appid: config.headers.appid,
+      deviceid: config.headers.deviceid,
+      authorization: config.headers.Authorization,
+    },
+    status: 200,
+    statusText: 'OK',
+    headers: {},
+    config,
+  }),
+})
+const childResponse = await childClient.http.get('/orders', { page: 1 })
+
+assert.equal(childResponse.url, 'http://child-api.local/orders')
+assert.equal(childResponse.appid, 'child-app')
+assert.equal(childResponse.deviceid, 'child-device')
+assert.equal(childResponse.authorization, childToken)
 
 console.log('portal-runtime verification passed')
